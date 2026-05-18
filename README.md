@@ -4,7 +4,7 @@
 
 A Claude Code plugin that ships a browser-based **RSVP (Rapid Serial Visual Presentation)** reader. Flashes text one word at a time with the focal letter aligned to a red guide line so your eyes don't have to move. Strips code blocks, tables, and other things that don't speed-read well, and inserts pause beats around lists and headers so your brain has time to switch context.
 
-![demo placeholder](docs/demo.gif)
+![speedread reader paused mid-word at 450 wpm — the focal letter "l" in "slash" is highlighted in red with the vertical guide line](docs/screenshot.png)
 
 ## Install
 
