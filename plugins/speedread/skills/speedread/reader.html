@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RSVP Reader</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; width: 100%; }
+  body {
+    background: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button, select, textarea, input { font-family: inherit; }
+
+  /* ---------- Input screen ---------- */
+  #input-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 32px;
+    gap: 18px;
+  }
+  #input-screen h1 {
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  #input-screen h1 .accent { color: #ff3030; }
+  #text-input {
+    width: 100%;
+    max-width: 760px;
+    height: 320px;
+    background: #0d0d0d;
+    color: #eee;
+    border: 1px solid #1f1f1f;
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: vertical;
+    border-radius: 6px;
+    user-select: text;
+  }
+  #text-input:focus { outline: 1px solid #ff3030; border-color: #ff3030; }
+  .controls-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .controls-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #aaa;
+    font-size: 13px;
+  }
+  button, select {
+    background: #161616;
+    color: #eee;
+    border: 1px solid #252525;
+    padding: 9px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  button:hover, select:hover { background: #1f1f1f; border-color: #333; }
+  button:active { background: #2a2a2a; }
+  button.primary {
+    background: #ff3030;
+    border-color: #ff3030;
+    color: #fff;
+    font-weight: 500;
+  }
+  button.primary:hover { background: #ff4747; border-color: #ff4747; }
+  .hint {
+    color: #666;
+    font-size: 12px;
+    text-align: center;
+    max-width: 600px;
+    line-height: 1.6;
+  }
+  .hint kbd {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #aaa;
+    font-family: -apple-system, monospace;
+  }
+
+  /* ---------- Reader screen ---------- */
+  #reader {
+    display: none;
+    height: 100%;
+    flex-direction: column;
+  }
+  #reader.active { display: flex; }
+
+  .word-stage {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .word-display {
+    position: relative;
+    font-size: clamp(40px, 7vw, 88px);
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    width: 100%;
+    max-width: 1200px;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
+  .word-pre  { text-align: right; }
+  .word-focal { color: #ff3030; text-align: center; padding: 0 0.02em; }
+  .word-post { text-align: left; }
+
+  /* The focal line — subtle vertical guide */
+  .focal-line {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1.5px;
+    height: 1.4em;
+    font-size: clamp(40px, 7vw, 88px);
+    background: linear-gradient(180deg,
+      transparent 0%,
+      #ff3030 20%, #ff3030 35%,
+      transparent 38%, transparent 62%,
+      #ff3030 65%, #ff3030 80%,
+      transparent 100%);
+    transform: translate(-50%, -50%);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  /* Pause overlay actions */
+  .pause-actions {
+    position: absolute;
+    bottom: 14%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    gap: 10px;
+    align-items: center;
+  }
+  .pause-actions.visible { display: flex; }
+  .pause-actions .label {
+    color: #666;
+    font-size: 12px;
+    margin-right: 8px;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    height: 3px;
+    background: #0e0e0e;
+    position: relative;
+  }
+  .progress-fill {
+    height: 100%;
+    background: #ff3030;
+    width: 0%;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 14px 20px;
+    background: #0a0a0a;
+    border-top: 1px solid #161616;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .toolbar .group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .toolbar .divider {
+    width: 1px;
+    height: 24px;
+    background: #1c1c1c;
+    margin: 0 6px;
+  }
+  .jump-btn {
+    min-width: 52px;
+    font-variant-numeric: tabular-nums;
+  }
+  .play-btn {
+    min-width: 92px;
+    background: #ff3030;
+    border-color: #ff3030;
+    color: #fff;
+    font-weight: 500;
+  }
+  .play-btn:hover { background: #ff4747; border-color: #ff4747; }
+  .speed-display {
+    min-width: 88px;
+    text-align: center;
+    color: #ddd;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    padding: 0 4px;
+  }
+  .speed-preset {
+    padding: 6px 10px;
+    font-size: 12px;
+    color: #888;
+  }
+  .speed-preset.active {
+    color: #fff;
+    background: #2a1010;
+    border-color: #ff3030;
+  }
+  input[type=range] {
+    accent-color: #ff3030;
+    width: 140px;
+  }
+  .position-info {
+    color: #666;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    min-width: 110px;
+    text-align: center;
+  }
+
+  /* ---------- Full text overlay ---------- */
+  #full-text-view {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #050505;
+    color: #ddd;
+    z-index: 10;
+    overflow: hidden;
+    flex-direction: column;
+  }
+  #full-text-view.active { display: flex; }
+
+  .full-text-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid #161616;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #888;
+    font-size: 13px;
+  }
+  .full-text-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 40px 24px 100px;
+  }
+  .full-text-content {
+    max-width: 760px;
+    margin: 0 auto;
+    line-height: 1.85;
+    font-size: 18px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Georgia, serif;
+    user-select: text;
+  }
+  .full-text-content .word {
+    cursor: pointer;
+    padding: 1px 2px;
+    border-radius: 3px;
+    transition: background 0.1s;
+  }
+  .full-text-content .word:hover { background: #1c1c1c; }
+  .full-text-content .word.current {
+    background: #ff3030;
+    color: #fff;
+  }
+  .full-text-content .word.past { color: #555; }
+  .full-text-content .pause-break {
+    display: block;
+    height: 0;
+    margin: 10px 0;
+    border-bottom: 1px dashed #1f1f1f;
+  }
+
+  .full-text-toolbar {
+    padding: 14px 20px;
+    background: #0a0a0a;
+    border-top: 1px solid #161616;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  /* Small screens */
+  @media (max-width: 700px) {
+    .toolbar { gap: 6px; padding: 12px; }
+    .jump-btn { min-width: 44px; padding: 8px 8px; font-size: 12px; }
+    .speed-preset { display: none; }
+    input[type=range] { width: 90px; }
+    .position-info { min-width: 70px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============== INPUT SCREEN ============== -->
+<div id="input-screen">
+  <h1>RSVP <span class="accent">Reader</span></h1>
+  <p class="hint">Paste text below. Words flash one-by-one with the focal letter aligned to the red line — your eyes don't have to move.</p>
+  <textarea id="text-input" placeholder="Paste any text here — an article, a Claude response, a spec, a chapter..."></textarea>
+  <div class="controls-row">
+    <label>
+      Speed
+      <select id="initial-speed">
+        <option value="300">300 wpm</option>
+        <option value="450" selected>450 wpm</option>
+        <option value="600">600 wpm</option>
+        <option value="700">700 wpm</option>
+        <option value="900">900 wpm</option>
+      </select>
+    </label>
+    <label title="Strip code blocks, unwrap formatting, add pauses around lists & headers">
+      <input type="checkbox" id="md-toggle" checked /> Smart markdown
+    </label>
+    <button id="paste-btn">Paste from clipboard</button>
+    <button class="primary" id="start-btn">Start Reading</button>
+  </div>
+  <p class="hint">
+    <kbd>Space</kbd> pause/play &nbsp;·&nbsp;
+    <kbd>←</kbd> <kbd>→</kbd> jump 10 &nbsp;·&nbsp;
+    <kbd>Shift</kbd>+<kbd>←/→</kbd> jump 20 &nbsp;·&nbsp;
+    <kbd>⌘/Ctrl</kbd>+<kbd>←/→</kbd> jump 50 &nbsp;·&nbsp;
+    <kbd>↑</kbd> <kbd>↓</kbd> speed &nbsp;·&nbsp;
+    <kbd>Esc</kbd> full text
+  </p>
+</div>
+
+<!-- ============== READER SCREEN ============== -->
+<div id="reader">
+  <div class="word-stage">
+    <div class="word-display">
+      <span class="word-pre"   id="pre"></span><span class="word-focal" id="focal"></span><span class="word-post"  id="post"></span>
+    </div>
+    <div class="focal-line"></div>
+
+    <div class="pause-actions" id="pause-actions">
+      <span class="label">Paused</span>
+      <button id="view-full-btn">View full text</button>
+    </div>
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+
+  <div class="toolbar">
+    <div class="group">
+      <button class="jump-btn" data-jump="-50">−50</button>
+      <button class="jump-btn" data-jump="-20">−20</button>
+      <button class="jump-btn" data-jump="-10">−10</button>
+    </div>
+    <button class="play-btn" id="play-btn">Pause</button>
+    <div class="group">
+      <button class="jump-btn" data-jump="10">+10</button>
+      <button class="jump-btn" data-jump="20">+20</button>
+      <button class="jump-btn" data-jump="50">+50</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="group">
+      <button class="speed-preset" data-preset="300">300</button>
+      <button class="speed-preset" data-preset="450">450</button>
+      <button class="speed-preset" data-preset="600">600</button>
+      <button class="speed-preset" data-preset="700">700</button>
+      <button class="speed-preset" data-preset="900">900</button>
+    </div>
+
+    <div class="group">
+      <input type="range" id="speed-slider" min="100" max="1200" step="25" value="450" />
+      <span class="speed-display" id="speed-display">450 wpm</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <span class="position-info" id="position-info">0 / 0</span>
+    <button id="restart-btn">Restart</button>
+    <button id="exit-btn">Exit</button>
+  </div>
+</div>
+
+<!-- ============== FULL TEXT OVERLAY ============== -->
+<div id="full-text-view">
+  <div class="full-text-header">
+    <span>Full text — click any word to set the resume point</span>
+    <span id="full-text-position">word 0 / 0</span>
+  </div>
+  <div class="full-text-scroll">
+    <div class="full-text-content" id="full-text-content"></div>
+  </div>
+  <div class="full-text-toolbar">
+    <button id="close-full-text-btn">Cancel — stay paused</button>
+    <button id="resume-from-here-btn" class="primary">Resume from highlighted word (Space / Esc)</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // -------- Elements --------
+  const els = {
+    inputScreen: document.getElementById('input-screen'),
+    textInput: document.getElementById('text-input'),
+    initialSpeed: document.getElementById('initial-speed'),
+    mdToggle: document.getElementById('md-toggle'),
+    startBtn: document.getElementById('start-btn'),
+    pasteBtn: document.getElementById('paste-btn'),
+
+    reader: document.getElementById('reader'),
+    pre: document.getElementById('pre'),
+    focal: document.getElementById('focal'),
+    post: document.getElementById('post'),
+    playBtn: document.getElementById('play-btn'),
+    pauseActions: document.getElementById('pause-actions'),
+    viewFullBtn: document.getElementById('view-full-btn'),
+    progressFill: document.getElementById('progress-fill'),
+    positionInfo: document.getElementById('position-info'),
+    speedDisplay: document.getElementById('speed-display'),
+    speedSlider: document.getElementById('speed-slider'),
+    restartBtn: document.getElementById('restart-btn'),
+    exitBtn: document.getElementById('exit-btn'),
+
+    fullTextView: document.getElementById('full-text-view'),
+    fullTextContent: document.getElementById('full-text-content'),
+    fullTextPosition: document.getElementById('full-text-position'),
+    resumeFromHereBtn: document.getElementById('resume-from-here-btn'),
+    closeFullTextBtn: document.getElementById('close-full-text-btn'),
+  };
+
+  const presets = document.querySelectorAll('.speed-preset');
+
+  // -------- State --------
+  let words = [];
+  let index = 0;         // index of the NEXT word to display
+  let wpm = 450;
+  let playing = false;
+  let timeoutId = null;
+  let selectedWordIndex = 0;
+
+  // -------- Persistence --------
+  const saved = (() => {
+    try { return JSON.parse(localStorage.getItem('rsvp-state') || '{}'); }
+    catch { return {}; }
+  })();
+  if (saved.text) els.textInput.value = saved.text;
+  if (saved.wpm) {
+    wpm = saved.wpm;
+    els.initialSpeed.value = String(wpm);
+  }
+  if (typeof saved.smartMd === 'boolean') els.mdToggle.checked = saved.smartMd;
+
+  function save() {
+    try {
+      localStorage.setItem('rsvp-state', JSON.stringify({
+        text: els.textInput.value,
+        wpm,
+        smartMd: els.mdToggle.checked,
+      }));
+    } catch {}
+  }
+
+  // -------- ORP (Optimal Recognition Point) --------
+  // Returns the index of the focal character. Tuned to match Spritz-style positioning.
+  function orp(word) {
+    const n = word.length;
+    if (n <= 1) return 0;
+    if (n <= 5) return 1;
+    if (n <= 9) return 2;
+    if (n <= 13) return 3;
+    return 4;
+  }
+
+  // -------- Markdown preprocessing --------
+  // Strip code/formatting, normalize lists & headers, insert pause tokens at section
+  // boundaries so the reader gets natural rests between chunks. Pause tokens use the
+  // sentinel [[PAUSE:ms]] which the playback layer recognizes and waits on without
+  // displaying anything.
+  function looksLikeMarkdown(text) {
+    return /^#{1,6}\s/m.test(text)
+        || /^\s*[-*+]\s+\S/m.test(text)
+        || /^\s*\d+\.\s+\S/m.test(text)
+        || /```/.test(text)
+        || /\*\*[^*\n]+\*\*/.test(text)
+        || /\[[^\]\n]+\]\([^)\n]+\)/.test(text)
+        || /^>\s/m.test(text);
+  }
+
+  function preprocessMarkdown(text) {
+    let s = text;
+
+    // Drop fenced code blocks entirely — code doesn't speed-read.
+    s = s.replace(/```[\s\S]*?```/g, ' [[PAUSE:400]] ');
+
+    // Drop pipe tables (heuristic: 2+ pipes on consecutive lines) — they don't speed-read either.
+    s = s.replace(/(?:^\|.*\|.*$\n?){2,}/gm, ' [[PAUSE:400]] ');
+
+    // Unwrap inline code (keep the text, drop the backticks).
+    s = s.replace(/`([^`\n]+)`/g, '$1');
+
+    // Images → alt text only (or drop).
+    s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
+
+    // Links → keep visible text only.
+    s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
+    // Emphasis markers.
+    s = s.replace(/(\*\*|__)(.+?)\1/g, '$2');
+    s = s.replace(/(?<![*\w])\*([^*\n]+)\*(?!\*)/g, '$1');
+    s = s.replace(/(?<![_\w])_([^_\n]+)_(?!_)/g, '$1');
+    s = s.replace(/~~(.+?)~~/g, '$1');
+
+    // Headers → strip marker, add pause before & after so the brain gets a beat.
+    s = s.replace(/^#{1,6}\s+(.+?)\s*#*\s*$/gm, '\n[[PAUSE:500]] $1. [[PAUSE:350]]\n');
+
+    // Horizontal rules.
+    s = s.replace(/^\s*(?:---+|\*\*\*+|___+)\s*$/gm, '\n[[PAUSE:500]]\n');
+
+    // List items → strip marker, add small pause between items.
+    s = s.replace(/^\s*[-*+]\s+(.+)$/gm, '$1. [[PAUSE:150]]');
+    s = s.replace(/^\s*\d+\.\s+(.+)$/gm, '$1. [[PAUSE:150]]');
+
+    // Blockquotes — strip marker.
+    s = s.replace(/^>\s?/gm, '');
+
+    // Paragraph breaks → small pause.
+    s = s.replace(/\n\s*\n+/g, ' [[PAUSE:350]] ');
+
+    return s;
+  }
+
+  // -------- Tokenization --------
+  // Split on whitespace; pause tokens are kept verbatim. Very long hyphenated words get split.
+  const PAUSE_RE = /^\[\[PAUSE:(\d+)\]\]$/;
+  function isPauseToken(s) { return PAUSE_RE.test(s); }
+  function pauseMs(s) { const m = s.match(PAUSE_RE); return m ? parseInt(m[1], 10) : 0; }
+
+  function tokenize(text) {
+    const raw = text.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+    const out = [];
+    for (const tok of raw) {
+      if (isPauseToken(tok)) {
+        out.push(tok);
+        continue;
+      }
+      if (tok.length > 13 && tok.includes('-')) {
+        const parts = tok.split('-');
+        for (let i = 0; i < parts.length; i++) {
+          out.push(parts[i] + (i < parts.length - 1 ? '-' : ''));
+        }
+      } else {
+        out.push(tok);
+      }
+    }
+    return out;
+  }
+
+  // -------- Per-word duration --------
+  // Long words and punctuation get extra dwell time so reading stays comprehensible.
+  function durationFor(word, baseMs) {
+    let mult = 1;
+    if (word.length > 8) mult += (word.length - 8) * 0.05;
+    if (/[,;:]$/.test(word)) mult += 0.5;
+    if (/[.!?]$/.test(word)) mult += 1.0;
+    if (/^["'(\[]/.test(word) || /["')\]]$/.test(word)) mult += 0.1;
+    return Math.max(40, baseMs * mult);
+  }
+
+  // -------- Rendering --------
+  function renderWord(word) {
+    if (!word) {
+      els.pre.textContent = '';
+      els.focal.textContent = '';
+      els.post.textContent = '';
+      return;
+    }
+    const p = orp(word);
+    els.pre.textContent = word.slice(0, p);
+    els.focal.textContent = word.charAt(p) || '';
+    els.post.textContent = word.slice(p + 1);
+  }
+
+  function updateProgress() {
+    const shown = Math.max(0, Math.min(words.length, index));
+    const pct = words.length === 0 ? 0 : (shown / words.length) * 100;
+    els.progressFill.style.width = pct + '%';
+    els.positionInfo.textContent = `${shown} / ${words.length}`;
+  }
+
+  function setWpm(newWpm, persist = true) {
+    wpm = Math.max(100, Math.min(1200, Math.round(newWpm)));
+    els.speedDisplay.textContent = `${wpm} wpm`;
+    els.speedSlider.value = String(wpm);
+    presets.forEach(b => b.classList.toggle('active', parseInt(b.dataset.preset, 10) === wpm));
+    if (persist) save();
+  }
+
+  // -------- Playback --------
+  function tick() {
+    if (!playing) return;
+    if (index >= words.length) {
+      playing = false;
+      els.playBtn.textContent = 'Play';
+      els.pauseActions.classList.add('visible');
+      return;
+    }
+    const word = words[index];
+    index++;
+    updateProgress();
+
+    if (isPauseToken(word)) {
+      // Don't display, just wait. Caps protect against pathological input.
+      const ms = Math.min(1500, Math.max(80, pauseMs(word)));
+      timeoutId = setTimeout(tick, ms);
+      return;
+    }
+
+    renderWord(word);
+    const baseMs = 60000 / wpm;
+    const ms = durationFor(word, baseMs);
+    timeoutId = setTimeout(tick, ms);
+  }
+
+  function play() {
+    if (words.length === 0) return;
+    if (index >= words.length) index = 0;
+    playing = true;
+    els.playBtn.textContent = 'Pause';
+    els.pauseActions.classList.remove('visible');
+    tick();
+  }
+
+  function pause() {
+    playing = false;
+    els.playBtn.textContent = 'Play';
+    els.pauseActions.classList.add('visible');
+    if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+  }
+
+  function togglePlay() { playing ? pause() : play(); }
+
+  // Helper: find the nearest displayable (non-pause) token at or after idx in `dir` direction.
+  function nearestDisplayable(idx, dir = +1) {
+    let i = Math.max(0, Math.min(words.length - 1, idx));
+    while (i >= 0 && i < words.length && isPauseToken(words[i])) i += dir;
+    if (i < 0 || i >= words.length) {
+      // fall back to a search in the opposite direction
+      i = Math.max(0, Math.min(words.length - 1, idx));
+      while (i >= 0 && i < words.length && isPauseToken(words[i])) i -= dir;
+    }
+    return Math.max(0, Math.min(words.length - 1, i));
+  }
+
+  function jump(n) {
+    const wasPlaying = playing;
+    pause();
+    // After rendering a word, index points to the NEXT word. So the currently shown
+    // word is at index-1. Jump relative to that — counting *displayable* words only.
+    let current = Math.max(0, index - 1);
+    const step = n > 0 ? 1 : -1;
+    let remaining = Math.abs(n);
+    let i = current;
+    while (remaining > 0 && i + step >= 0 && i + step < words.length) {
+      i += step;
+      if (!isPauseToken(words[i])) remaining--;
+    }
+    i = nearestDisplayable(i, step);
+    index = i;
+    renderWord(words[index]);
+    index++;
+    updateProgress();
+    if (wasPlaying) play();
+  }
+
+  // -------- Start / exit --------
+  function startReading() {
+    const text = els.textInput.value.trim();
+    if (!text) { els.textInput.focus(); return; }
+    const smart = els.mdToggle.checked;
+    const processed = (smart && looksLikeMarkdown(text)) ? preprocessMarkdown(text) : text;
+    words = tokenize(processed);
+    if (words.length === 0) return;
+    setWpm(parseInt(els.initialSpeed.value, 10) || 450);
+    index = 0;
+    save();
+    els.inputScreen.style.display = 'none';
+    els.reader.classList.add('active');
+    play();
+  }
+
+  function exitReading() {
+    pause();
+    els.reader.classList.remove('active');
+    els.fullTextView.classList.remove('active');
+    els.inputScreen.style.display = 'flex';
+  }
+
+  // -------- Full text view --------
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[c]);
+  }
+
+  function showFullText() {
+    const current = Math.max(0, index - 1);
+    selectedWordIndex = current;
+    const html = [];
+    let lastWasBreak = false;
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      if (isPauseToken(w)) {
+        if (pauseMs(w) >= 300 && !lastWasBreak) {
+          html.push(' <span class="pause-break"> </span> ');
+          lastWasBreak = true;
+        }
+        continue;
+      }
+      const cls = i === current ? 'word current' : (i < current ? 'word past' : 'word');
+      html.push(`<span class="${cls}" data-i="${i}">${escapeHtml(w)}</span>`);
+      lastWasBreak = false;
+    }
+    els.fullTextContent.innerHTML = html.join(' ');
+    els.fullTextPosition.textContent = `word ${current + 1} / ${words.length}`;
+    els.fullTextView.classList.add('active');
+    requestAnimationFrame(() => {
+      const curEl = els.fullTextContent.querySelector('.current');
+      if (curEl) curEl.scrollIntoView({ block: 'center' });
+    });
+  }
+
+  // Close + resume from the user's selected word (which defaults to where they paused).
+  // This is the standard "I peeked at the text, now keep going" action.
+  function closeAndResume() {
+    els.fullTextView.classList.remove('active');
+    index = selectedWordIndex;
+    renderWord(words[index] || '');
+    index++;
+    updateProgress();
+    play();
+  }
+
+  // Just close the overlay without changing position or resuming.
+  function closeFullText() {
+    els.fullTextView.classList.remove('active');
+  }
+
+  // -------- Event bindings --------
+  els.startBtn.addEventListener('click', startReading);
+  els.pasteBtn.addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) els.textInput.value = text;
+    } catch {
+      alert('Clipboard read was blocked. Paste manually with ⌘V / Ctrl+V.');
+    }
+  });
+
+  els.playBtn.addEventListener('click', togglePlay);
+  els.viewFullBtn.addEventListener('click', showFullText);
+  els.closeFullTextBtn.addEventListener('click', closeFullText);
+  els.resumeFromHereBtn.addEventListener('click', closeAndResume);
+  els.exitBtn.addEventListener('click', exitReading);
+  els.mdToggle.addEventListener('change', save);
+  els.restartBtn.addEventListener('click', () => {
+    pause();
+    index = 0;
+    renderWord(words[0] || '');
+    updateProgress();
+    play();
+  });
+
+  document.querySelectorAll('.jump-btn').forEach(btn => {
+    btn.addEventListener('click', () => jump(parseInt(btn.dataset.jump, 10)));
+  });
+
+  els.speedSlider.addEventListener('input', e => setWpm(parseInt(e.target.value, 10)));
+  presets.forEach(b => {
+    b.addEventListener('click', () => setWpm(parseInt(b.dataset.preset, 10)));
+  });
+
+  // Click any word in the full-text view to mark it as the resume point.
+  els.fullTextContent.addEventListener('click', e => {
+    const target = e.target.closest('.word');
+    if (!target) return;
+    els.fullTextContent.querySelectorAll('.current').forEach(el => el.classList.remove('current'));
+    target.classList.add('current');
+    selectedWordIndex = parseInt(target.dataset.i, 10);
+    els.fullTextPosition.textContent = `word ${selectedWordIndex + 1} / ${words.length}`;
+  });
+
+  // -------- Keyboard --------
+  document.addEventListener('keydown', e => {
+    // Don't hijack keys while typing in the input screen.
+    if (!els.reader.classList.contains('active')) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+
+    const inFullText = els.fullTextView.classList.contains('active');
+
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (inFullText) { closeAndResume(); return; }
+      togglePlay();
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (inFullText) closeAndResume();
+      else { pause(); showFullText(); }
+      return;
+    }
+    if (inFullText) return; // arrows below only apply in reader proper
+
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const delta = (e.metaKey || e.ctrlKey) ? -50 : (e.shiftKey ? -20 : -10);
+      jump(delta);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      const delta = (e.metaKey || e.ctrlKey) ? 50 : (e.shiftKey ? 20 : 10);
+      jump(delta);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setWpm(wpm + 25);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setWpm(wpm - 25);
+    }
+  });
+
+  // -------- Embedded mode (used by the `speedread` skill) --------
+  // A wrapper HTML can set window.RSVP_EMBEDDED = { text, wpm?, smartMd?, autostart? }
+  // before this script runs. We pick that up and pre-fill / auto-start.
+  if (window.RSVP_EMBEDDED && typeof window.RSVP_EMBEDDED.text === 'string') {
+    const e = window.RSVP_EMBEDDED;
+    els.textInput.value = e.text;
+    if (e.wpm) els.initialSpeed.value = String(e.wpm);
+    if (typeof e.smartMd === 'boolean') els.mdToggle.checked = e.smartMd;
+    if (e.autostart !== false) setTimeout(startReading, 30);
+  }
+
+  // -------- URL params (?text=…&wpm=…&autostart=1) — for short ad-hoc invocations --------
+  const params = new URLSearchParams(location.search);
+  if (params.has('text')) els.textInput.value = params.get('text');
+  if (params.has('wpm')) els.initialSpeed.value = params.get('wpm');
+  if (params.has('autostart') && els.textInput.value.trim()) {
+    setTimeout(startReading, 50);
+  }
+
+  // Initial UI sync
+  setWpm(wpm, false);
+})();
+</script>
+</body>
+</html>

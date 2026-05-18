@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*~
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Generated launcher output
+/tmp/speedread-*.html
+
+# OS-specific
+Thumbs.db

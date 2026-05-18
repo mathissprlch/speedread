@@ -1,0 +1,13 @@
+{
+  "name": "speedread",
+  "version": "0.1.0",
+  "description": "RSVP reader that flashes text one word at a time at 300–900 wpm with the focal letter aligned. Strips code blocks and tables, adds pause beats around lists and headers. Invoke with /speedread.",
+  "author": {
+    "name": "Mathis Sperlich",
+    "email": "sperlich.mathis@gmail.com"
+  },
+  "homepage": "https://github.com/mathissprlch/speedread",
+  "repository": "https://github.com/mathissprlch/speedread",
+  "license": "MIT",
+  "keywords": ["rsvp", "speed-reading", "productivity", "reader", "skill"]
+}

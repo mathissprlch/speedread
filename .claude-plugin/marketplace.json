@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "speedread-marketplace",
+  "description": "RSVP (rapid serial visual presentation) reader for Claude Code — read long responses, plans, and specs at 300–900 wpm without scrolling.",
+  "owner": {
+    "name": "Mathis Sperlich",
+    "email": "sperlich.mathis@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "speedread",
+      "description": "Launches a browser-based RSVP reader for any text — Claude responses, plans, articles. Flashes words one at a time with the focal letter aligned for minimal eye movement.",
+      "category": "productivity",
+      "source": "./plugins/speedread",
+      "version": "0.1.0",
+      "license": "MIT",
+      "keywords": ["rsvp", "speed-reading", "productivity", "reader"]
+    }
+  ]
+}
